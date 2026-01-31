@@ -1,0 +1,19 @@
+QMainWindow {
+    background-color: #191919;
+}
+
+QWidget#score_container {
+    border: 1px solid white;
+    border-radius: 5px;
+    background-color: #2C2C2C;
+}
+
+QPushButton#restart_score_button {
+    color: white;
+    padding: 10px;
+}
+
+QPushButton#play_button {
+    color: black;
+    padding: 10px;
+}

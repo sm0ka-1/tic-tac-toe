@@ -1,136 +1,230 @@
-from tkinter import *
+import sys
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QPushButton, QStatusBar, QVBoxLayout, \
+    QHBoxLayout, QSizePolicy
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QCursor
+from board_container import BoardContainer
+from board_widget import CELLS_COUNT
+from config import TITLE_COLOR, PLAYER_X_COLOR, PLAYER_O_COLOR, SCORE_BUTTON_ACTIVE_STYLE_SHEET, SCORE_BUTTON_INACTIVE_STYLE_SHEET, PLAY_BUTTON_ACTIVE_STYLE_SHEET, PLAY_BUTTON_INACTIVE_STYLE_SHEET
 
-TITLE_FONT = "Ink Free"
-TEXT_FONT = "8514oem"
-BG_COLOUR = "lawn green"
-BUTTON_COLOUR = "PaleGreen1"
-CELL_SIZE = 117
-CANVAS_SIZE = CELL_SIZE*3
-
-
-# ------------------------------------- GAME LOGIC ------------------------------------- #
-
-board = [[None]*3 for _ in range(3)]
-starting_turn = "X"
-turn = starting_turn
-game_active = True
-
-def check_winner():
-    global board, turn
-    # Row and Columns
-    for i in range(3):
-        if board[i][0]==board[i][1]==board[i][2] and board[i][0] is not None:
-            return board[i][0]
-        if board[0][i]==board[1][i]==board[2][i] and board[0][i] is not None:
-            return board[0][i]
-    # Diagonals
-    if board[0][0]==board[1][1]==board[2][2] and board[0][0] is not None:
-        return board[0][0]
-    if board[0][2]==board[1][1]==board[2][0] and board[0][2] is not None:
-        return board[0][2]
-    # Tie
-    if all(all(cell is not None for cell in row) for row in board):
-        return "Tie"
-    return None
+# Fonts
+TITLE_FONT = QFont("Consolas", 60, QFont.Weight.Bold)
+SCORE_TITLE_FONT = QFont("Consolas", 25)
+TEXT_FONT = QFont("Consolas", 15)
+RESTART_BUTTON_FONT = QFont("Consolas", 17)
+PLAY_BUTTON_FONT = QFont("Consolas", 20)
 
 
-def canvas_click(event):
-    global turn, board, game_active
-    if not game_active:
-        return
+class MainWindow(QMainWindow):
 
-    x, y = event.x, event.y
-    row = y // CELL_SIZE
-    col = x // CELL_SIZE
-    if board[row][col] is None:
-        board[row][col] = turn
-        canvas.create_text(col*CELL_SIZE + CELL_SIZE//2, row*CELL_SIZE + CELL_SIZE//2, text=turn, font=(TITLE_FONT, 67, "bold"), fill="white", tags="xo")
-        winner = check_winner()
-        if winner:
-            game_active = False
-            if winner=="X":
-                playerX_score.config(text=str(int(playerX_score.cget("text"))+1))
-                turn_label.config(text=f"Player X wins!")
-            elif winner=="O":
-                playerO_score.config(text=str(int(playerO_score.cget("text"))+1))
-                turn_label.config(text="Player O wins!")
-            elif winner=="Tie":
-                turn_label.config(text="Tie!")
+    def __init__(self):
+        super().__init__()
+        self.is_play_button_active = False
+
+        self.initialize_ui()
+
+        with open("styles.css", "r") as file:
+            styles = file.read()
+        self.setStyleSheet(styles)
+
+
+    def initialize_ui(self):
+        self.setGeometry(100,50,700,552)
+        self.setMinimumWidth(700)
+        self.setWindowTitle("Tic Tac Toe Game")
+        self.generate_window()
+        self.show()
+
+
+    def generate_window(self):
+        main_widget = QWidget()
+        self.setCentralWidget(main_widget)
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(30,20,50,20)
+        main_widget.setLayout(main_layout)
+
+        title = QLabel("Tic Tac Toe")
+        title.setFont(TITLE_FONT)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet(f"color: {TITLE_COLOR}")
+
+        content_layout = QHBoxLayout()
+
+        main_layout.addStretch(1)
+        main_layout.addWidget(title)
+        main_layout.addStretch(1)
+        main_layout.addLayout(content_layout, stretch=20)
+        main_layout.addStretch(2)
+
+        self.board_container = BoardContainer()
+        self.board = self.board_container.board
+        self.board.setObjectName("board")
+        self.board.game_event.connect(self.handle_game_event)
+
+        side_panel = self.generate_panel()
+
+        content_layout.addStretch(1)
+        content_layout.addWidget(self.board_container, stretch=5)
+        content_layout.addSpacing(20)
+        content_layout.addWidget(side_panel)
+        content_layout.addStretch(1)
+
+
+    def generate_panel(self):
+        # WIDGETS
+        side_panel = QWidget()
+        side_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        side_panel.setMaximumWidth(300)
+
+        score_label = QLabel("SCORE")
+        score_label.setFont(SCORE_TITLE_FONT)
+        score_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        player_x_label = QLabel(" Player X:")
+        player_x_label.setFont(TEXT_FONT)
+        player_x_label.setStyleSheet(f"color: {PLAYER_X_COLOR}")
+        self.player_x_score = QLabel("0 ")
+        self.player_x_score.setFont(TEXT_FONT)
+        self.player_x_score.setStyleSheet(f"color: {PLAYER_X_COLOR}")
+        self.player_x_score.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        player_o_label = QLabel(" Player O:")
+        player_o_label.setFont(TEXT_FONT)
+        player_o_label.setStyleSheet(f"color: {PLAYER_O_COLOR}")
+        self.player_o_score = QLabel("0 ")
+        self.player_o_score.setFont(TEXT_FONT)
+        self.player_o_score.setStyleSheet(f"color: {PLAYER_O_COLOR}")
+        self.player_o_score.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self.restart_score_button = QPushButton("Restart Score")
+        self.restart_score_button.setFont(RESTART_BUTTON_FONT)
+        self.restart_score_button.setStyleSheet(SCORE_BUTTON_INACTIVE_STYLE_SHEET)
+        self.restart_score_button.clicked.connect(self.restart_score)
+        self.restart_score_button.setObjectName("restart_score_button")
+
+        score_container = QWidget()
+        score_container.setObjectName("score_container")
+        score_container.setContentsMargins(10, 10, 10, 10)
+
+        self.info_label = QLabel(f"Player {self.board.turn} starts!")
+        self.info_label.setFont(TEXT_FONT)
+        self.info_label.setStyleSheet(f"color: {PLAYER_X_COLOR if self.board.turn == 'X' else PLAYER_O_COLOR}")
+        self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.play_again_button = QPushButton("PLAY AGAIN")
+        self.play_again_button.setFont(PLAY_BUTTON_FONT)
+        self.play_again_button.setStyleSheet(PLAY_BUTTON_INACTIVE_STYLE_SHEET)
+        self.play_again_button.clicked.connect(self.play_again)
+        self.play_again_button.setObjectName("play_button")
+
+
+        # LAYOUTS
+        side_panel_layout = QVBoxLayout()
+        side_panel_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        side_panel.setLayout(side_panel_layout)
+
+        player_x_row = QHBoxLayout()
+        player_x_row.addWidget(player_x_label)
+        player_x_row.addWidget(self.player_x_score)
+
+        player_o_row = QHBoxLayout()
+        player_o_row.addWidget(player_o_label)
+        player_o_row.addWidget(self.player_o_score)
+
+        score_container_layout = QVBoxLayout()
+        score_container_layout.addWidget(score_label)
+        score_container_layout.addLayout(player_x_row)
+        score_container_layout.addLayout(player_o_row)
+        score_container_layout.addWidget(self.restart_score_button)
+        score_container_layout.setSpacing(15)
+        score_container.setLayout(score_container_layout)
+
+        side_panel_layout.addWidget(score_container)
+        side_panel_layout.addStretch(1)
+        side_panel_layout.addWidget(self.info_label)
+        side_panel_layout.addStretch(1)
+        side_panel_layout.addWidget(self.play_again_button)
+        side_panel_layout.addStretch(5)
+        side_panel_layout.setSpacing(40)
+
+        return side_panel
+
+
+    def handle_game_event(self, event):
+        self.activate_play_button(True)
+        self.update_info_label(event)
+
+
+    def update_info_label(self, event):
+        type_ = event["type"]
+        if type_ == "turn":
+            turn = event["turn"]
+            self.info_label.setText(f"Turn: Player {turn}")
+            self.info_label.setStyleSheet(f"color: {PLAYER_X_COLOR if turn == 'X' else PLAYER_O_COLOR}")
+        elif type_ == "win":
+            winner = event["winner"]
+            self.info_label.setText(f"Player {winner} WINS!")
+            self.activate_restart_score_button(True)
+            if winner == "X":
+                self.info_label.setStyleSheet(f"color: {PLAYER_X_COLOR}")
+                self.player_x_score.setText(f"{str(int(self.player_x_score.text()) + 1)} ")
+            else:
+                self.info_label.setStyleSheet(F"color: {PLAYER_O_COLOR}")
+                self.player_o_score.setText(f"{str(int(self.player_o_score.text()) + 1)} ")
+        elif type_ == "tie":
+            self.info_label.setText("Tie!")
+            self.info_label.setStyleSheet("color: #FFFF00")
+
+
+    def restart_score(self):
+        if self.player_x_score.text() != "0 " or self.player_o_score.text() != "0 ":
+            self.player_x_score.setText("0 ")
+            self.player_o_score.setText("0 ")
+            self.activate_restart_score_button(False)
+            self.play_again()
+
+
+    def play_again(self):
+        if self.is_play_button_active:
+            self.is_play_button_active = False
+            self.activate_play_button(False)
+            self.board.board = [[None]*CELLS_COUNT for _ in range(CELLS_COUNT)]
+            self.board.starting_turn = "O" if self.board.starting_turn == "X" else "X"
+            self.board.turn = self.board.starting_turn
+            self.board.game_active = True
+            self.board.win_line = None
+            self.board.update()
+            self.info_label.setText(f"Player {self.board.turn} starts!")
+            self.info_label.setStyleSheet(f"color: {PLAYER_X_COLOR if self.board.turn == 'X' else PLAYER_O_COLOR}")
+
+
+    def activate_restart_score_button(self, activate):
+        if activate:
+            self.restart_score_button.setStyleSheet(SCORE_BUTTON_ACTIVE_STYLE_SHEET)
+            self.restart_score_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         else:
-            turn = "O" if turn=="X" else "X"
-            turn_label.config(text=f"Turn: {turn}")
+            self.restart_score_button.setStyleSheet(SCORE_BUTTON_INACTIVE_STYLE_SHEET)
+            self.restart_score_button.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
 
 
-
-def restart_score():
-    playerX_score.config(text="0")
-    playerO_score.config(text="0")
-    play_again()
-
-
-def play_again():
-    global board, starting_turn, turn, game_active
-    board = [[None]*3 for _ in range(3)]
-    starting_turn = "O" if starting_turn == "X" else "X"
-    turn = starting_turn
-    game_active = True
-    canvas.delete("xo")
-    turn_label.config(text=f"Turn: {turn}")
+    def activate_play_button(self, activate):
+        if activate:
+            self.play_again_button.setStyleSheet(PLAY_BUTTON_ACTIVE_STYLE_SHEET)
+            self.play_again_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            self.is_play_button_active = True
+        else:
+            self.play_again_button.setStyleSheet(PLAY_BUTTON_INACTIVE_STYLE_SHEET)
+            self.play_again_button.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+            self.is_play_button_active = False
 
 
-
-# -------------------------------------- UI SETUP -------------------------------------- #
-
-window = Tk()
-window.title("Tic Tac Toe Game")
-window.config(padx=110, pady=30, bg=BG_COLOUR)
-
-# Title
-title = Label(text="Tic Tac Toe", font=(TITLE_FONT, 60, "bold"), bg=BG_COLOUR, fg="black")
-title.grid(column=0, columnspan=3, row=0, pady=10)
-
-# Board
-canvas = Canvas(width=CANVAS_SIZE, height=CANVAS_SIZE, bg=BG_COLOUR, highlightthickness=0)
-canvas.grid(column=0, row=1, rowspan=16, pady=30, sticky=N+W)
-
-window.grid_columnconfigure(1, minsize=70)
-
-# Score
-score_label = Label(text="SCORE", font=(TEXT_FONT, 30, "normal"), bg=BG_COLOUR, fg="black")
-score_label.grid(column=2, columnspan=2, row=1)
-
-playerX_label = Label(text="Player X:", font=(TEXT_FONT, 20, "normal"), bg=BG_COLOUR, fg="black")
-playerX_label.grid(column=2, row=2, sticky=W)
-
-playerO_label = Label(text="Player O:", font=(TEXT_FONT, 20, "normal"), bg=BG_COLOUR, fg="black")
-playerO_label.grid(column=2, row=3, sticky=W)
-
-playerX_score = Label(text="0", font=(TEXT_FONT, 20, "normal"), bg=BG_COLOUR, fg="black")
-playerX_score.grid(column=3, row=2, sticky=E)
-
-playerO_score = Label(text="0", font=(TEXT_FONT, 20, "normal"), bg=BG_COLOUR, fg="black")
-playerO_score.grid(column=3, row=3, sticky=E)
-
-turn_label = Label(text="Turn: X", font=(TEXT_FONT, 23, "bold"), bg=BG_COLOUR, fg="white")
-turn_label.grid(column=2, columnspan=2, row=8)
-
-#Buttons
-restart_score_button = Button(text="Restart Score", command=restart_score, font=(TEXT_FONT, 20, "normal"), bg=BUTTON_COLOUR)
-restart_score_button.grid(column=2, columnspan=2, row=5, sticky=N+W+E)
-
-play_again_button = Button(text="PLAY AGAIN", command=play_again, font=(TEXT_FONT, 23, "bold"), bg=BUTTON_COLOUR, height=2)
-play_again_button.grid(column=2, columnspan=2, row=12, sticky=W+E)
+    def resizeEvent(self, event):
+        ratio = self.width() / self.height()
+        print(ratio)
 
 
-# ------------------------------------- GAME START ------------------------------------- #
-
-def draw_grid():
-    for i in range(1,3):
-        canvas.create_line(CELL_SIZE*i, 0, CELL_SIZE*i, CANVAS_SIZE, width=3, fill="black")
-        canvas.create_line(0, CELL_SIZE*i, CANVAS_SIZE, CELL_SIZE*i, width=3, fill="black")
-
-draw_grid()
-
-canvas.bind("<Button-1>", canvas_click)
-
-window.mainloop()
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    sys.exit(app.exec())
